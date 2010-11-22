@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="dslab2" default="compile" basedir="..">
+
+	<property name="src.dir" value="src"/>
+	<property name="build.dir" value="build"/>
+	<property name="cfg.dir" value="cfg" />
+
+	<path id="project.classpath">
+		<pathelement location="${build.dir}"/>
+		<pathelement location="${cfg.dir}" />
+	</path>
+
+    <target name="compile" description="Compile project.">
+        <mkdir dir="${build.dir}"/>
+        <javac srcdir="${src.dir}" destdir="${build.dir}" classpathref="project.classpath" debug="true" deprecation="true" includeantruntime="false"/>
+        <copy todir="${build.dir}">
+            <fileset dir="${cfg.dir}">
+                <include name="*.properties"/>
+            </fileset>
+        </copy>
+    </target>
+	
+	<target name="run-server1" depends="compile" description="Run 1st server.">
+		<!-- Replace "your.Server" with the qualified class name of your server implementation. -->
+		<java classname="server.Server" fork="true" classpathref="project.classpath">
+			<arg value="server1"/><!-- bindingName -->
+			<arg value="true"/><!-- initRegistry -->
+			<arg value="server2 server3"/><!-- serverNames -->
+		</java>
+	</target>
+	
+	<target name="run-server2" depends="compile" description="Run 2nd server.">
+		<!-- Replace "your.Server" with the qualified class name of your server implementation. -->
+		<java classname="server.Server" fork="true" classpathref="project.classpath">
+			<arg value="server2"/><!-- bindingName -->
+			<arg value="false"/><!-- initRegistry -->
+			<arg value="server1 server3"/><!-- serverNames -->
+		</java>
+	</target>
+	
+	<target name="run-server3" depends="compile" description="Run 3rd server.">
+		<!-- Replace "your.Server" with the qualified class name of your server implementation. -->
+		<java classname="server.Server" fork="true" classpathref="project.classpath">
+			<arg value="server3"/><!-- bindingName -->
+			<arg value="false"/><!-- initRegistry -->
+			<arg value="server1 server2"/><!-- serverNames -->
+		</java>
+	</target>
+
+	<target name="run-client1" depends="compile" description="Run 1st client.">
+		<!-- Replace "your.Client" with the qualified class name of your client implementation. -->
+		<java classname="client.Client" fork="true" classpathref="project.classpath">
+			<arg value="server1"/><!-- serverName -->
+		</java>
+	</target>
+	
+	<target name="run-client2" depends="compile" description="Run 2nd client.">
+		<!-- Replace "your.Client" with the qualified class name of your client implementation. -->
+		<java classname="your.Client" fork="true" classpathref="project.classpath">
+			<arg value="server1"/><!-- serverName -->
+		</java>
+	</target>
+	
+	<target name="run-client3" depends="compile" description="Run 3rd client.">
+		<!-- Replace "your.Client" with the qualified class name of your client implementation. -->
+		<java classname="your.Client" fork="true" classpathref="project.classpath">
+			<arg value="server2"/><!-- serverName -->
+		</java>
+	</target>
+	
+	<target name="clean" description="Clean build products.">
+        <delete dir="${build.dir}"/>
+    </target>
+    
+    <target name="rebuild" depends="clean, compile" description="Clean and build products."/>
+
+</project>
