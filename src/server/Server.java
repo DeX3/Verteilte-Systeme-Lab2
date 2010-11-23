@@ -5,18 +5,21 @@ import java.io.IOException;
 import java.rmi.AccessException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import remote.Distributor;
+import remote.IDistributor;
 import remote.IRemoteServer;
 import cmd.BooleanParameter;
 import cmd.CommandLineParser;
 import cmd.StringParameter;
+import entities.Event;
 import entities.RegistryInfo;
+import entities.User;
 import exceptions.ParseException;
 import exceptions.ValidationException;
 
@@ -27,17 +30,29 @@ public class Server {
 	
 	static final String PROPERTIES_FILE = "registry.properties";
 	
-	
-
 	private String bindingName;
 	private boolean initRegistry;
 	private String[] serverNames;
 	private RegistryInfo regInfo;
 	private Registry reg;
 	
-	private ConcurrentHashMap<String, Remote> servers;
+	private ConcurrentHashMap<String, IRemoteServer> servers;
+	private ConcurrentHashMap<String, User> users;
+	private ConcurrentHashMap<String, Event> events;
+
+	
+	public ConcurrentHashMap<String, User> getUsers() {
+		return users;
+	}
+	
+	public ConcurrentHashMap<String, Event> getEvents() {
+		return this.events;
+	}
+
 
 	private LookupTask lookupTask;
+	private IDistributor stub;
+	
 	
 	public Server( String bindingName, boolean initRegistry, RegistryInfo regInfo, String...serverNames )
 	{
@@ -46,7 +61,9 @@ public class Server {
 		this.serverNames = serverNames;
 		this.regInfo = regInfo;
 		
-		this.servers = new ConcurrentHashMap<String, Remote>();
+		this.servers = new ConcurrentHashMap<String, IRemoteServer>();
+		this.users = new ConcurrentHashMap<String, User>();
+		this.events = new ConcurrentHashMap<String, Event>();
 		this.lookupTask = new LookupTask( this );
 	}
 	
@@ -97,6 +114,7 @@ public class Server {
 			return;
 		}
 		
+		
 		Server srv = new Server(	PRM_BINDINGNAME.getValue(),
 									PRM_INITREGISTRY.getValue(),
 									regInfo,
@@ -112,8 +130,9 @@ public class Server {
 		//Create or connect to the registry
 		try{
 			reg = this.regInfo.connect( this.initRegistry );
-			
-			reg.bind( this.bindingName, new Distributor() );
+			Distributor dist = new Distributor( this );
+			this.stub = (IDistributor)UnicastRemoteObject.exportObject( dist, 0 );
+			reg.bind( this.bindingName, this.stub );
 			
 		}catch( RemoteException rex )
 		{
@@ -125,6 +144,8 @@ public class Server {
 			return false;
 		}
 		
+		logger.info( "\"" + this.bindingName + "\" started up" );
+		
 		this.lookupTask.start();
 		
 		
@@ -134,14 +155,28 @@ public class Server {
 	
 	public void stop() throws AccessException, NotBoundException, RemoteException
 	{
+		if( this.stub != null )
+			UnicastRemoteObject.unexportObject( this.stub, true );
+		
+		UnicastRemoteObject.unexportObject( this.reg, true );
 		this.reg.unbind( this.bindingName );
+		
 	}
 	
 	public boolean addServer( String name, IRemoteServer server )
 	{
 		return this.servers.put( name, server ) == null;
 	}
+	
+	public IRemoteServer getServer( String name )
+	{
+		return this.servers.get( name );
+	}
 
+	public boolean isNetworkComplete()
+	{
+		return this.servers.size() == this.serverNames.length;
+	}
 
 	public Registry getRegistry() {
 		return this.reg;
@@ -151,5 +186,7 @@ public class Server {
 	public String[] getServerNames() {
 		return this.serverNames;
 	}
+
+
 
 }

@@ -43,6 +43,7 @@ public class RegistryInfo {
 		else
 			return LocateRegistry.getRegistry( this.host, this.port );
 	}
+	
 
 	public static RegistryInfo readRegistryInfo( String propertiesFile ) throws IOException, FileNotFoundException, ParseException
 	{

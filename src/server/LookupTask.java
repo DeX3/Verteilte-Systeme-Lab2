@@ -8,7 +8,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.logging.Logger;
 
-import remote.Distributor;
+import remote.IDistributor;
 
 
 public class LookupTask extends TimerTask {
@@ -22,11 +22,12 @@ public class LookupTask extends TimerTask {
 	public LookupTask( Server server )
 	{
 		this.server = server;
-		this.timer = new Timer();
 	}
 	
 	public void start()
 	{
+
+		this.timer = new Timer();
 		this.timer.schedule( this, 0, LOOKUP_TIME );
 	}
 	
@@ -37,7 +38,7 @@ public class LookupTask extends TimerTask {
 		try{
 			for( String serverName : this.server.getServerNames() )
 			{
-				Distributor d = (Distributor)reg.lookup( serverName );
+				IDistributor d = (IDistributor)reg.lookup( serverName );
 				
 				  if( this.server.addServer( serverName, d.getRemoteServer() ) )
 				  {

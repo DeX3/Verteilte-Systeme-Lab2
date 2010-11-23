@@ -1,6 +1,7 @@
 package server;
 
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 
 import entities.RegistryInfo;
 
@@ -15,7 +16,9 @@ public class RegHelper {
 		
 		Registry reg = regInfo.connect( false );
 		
+
 		reg.unbind( "server1" );
+		UnicastRemoteObject.unexportObject( reg, true );
 	}
 
 }

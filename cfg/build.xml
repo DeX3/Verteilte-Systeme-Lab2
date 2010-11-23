@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="dslab2" default="compile" basedir="..">
 
+
+	
 	<property name="src.dir" value="src"/>
 	<property name="build.dir" value="build"/>
 	<property name="cfg.dir" value="cfg" />
+	
+	  
 
 	<path id="project.classpath">
 		<pathelement location="${build.dir}"/>

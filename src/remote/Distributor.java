@@ -1,38 +1,44 @@
 package remote;
 
-import java.io.Serializable;
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.logging.Logger;
 
+import server.Server;
 
-public class Distributor implements Remote, Serializable {
+
+public class Distributor implements IDistributor {
 	private static final long serialVersionUID = 1360533913014116850L;
 
 	static final Logger logger = Logger.getLogger( Distributor.class.getName() );
 	
 	static IRemoteServer server = null;
 	
-	
-	public Distributor()
-	{ }
-	
-	public void hello( String str )
+	Server srv;
+	public Distributor( Server srv )
 	{
-		System.out.println( "Hello: " + str );
+		super();
+		this.srv = srv;
 	}
+
 	
+	/** (non-Javadoc)
+	 * @see remote.IDistributor#getRemoteClient()
+	 */
 	public IRemoteClient getRemoteClient() throws RemoteException
 	{
-		return new RemoteClient();
+		return new RemoteClient( this.srv );
 	}
 	
+	
+	/** (non-Javadoc)
+	 * @see remote.IDistributor#getRemoteServer()
+	 */
 	public synchronized IRemoteServer getRemoteServer() throws RemoteException
 	{
 		if( Distributor.server == null )
 		{
 			try {
-				Distributor.server = new RemoteServer();
+				Distributor.server = new RemoteServer( this.srv );
 			} catch( RemoteException rex ) {
 				logger.warning( "Could not create remote server: " + rex.getMessage() );
 			}
@@ -40,5 +46,4 @@ public class Distributor implements Remote, Serializable {
 		
 		return Distributor.server;
 	}
-
 }
