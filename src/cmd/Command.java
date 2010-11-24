@@ -18,6 +18,16 @@ public class Command {
 	/** The parameters for this command. */
 	LinkedHashSet<Parameter<?>> parameters;
 	
+	boolean hasRest = false;
+	
+	public boolean hasRest() {
+		return hasRest;
+	}
+
+	public void setHasRest(boolean hasRest) {
+		this.hasRest = hasRest;
+	}
+
 	/**
 	 * Instantiates a new command.
 	 * 
@@ -68,6 +78,12 @@ public class Command {
 		}
 		
 		return null;
+	}
+	
+	String rest = "";
+	public String getRest()
+	{
+		return this.rest;
 	}
 	
 	/**
@@ -121,6 +137,9 @@ public class Command {
 			i += 3;
 		}
 		
+		if( hasRest )
+			rest = m.group( m.groupCount() );
+		
 		return true;
 	}
 	
@@ -139,9 +158,12 @@ public class Command {
 		sb.append( Matcher.quoteReplacement( this.cmd ) );
 		
 		for( int i=0 ; i < this.parameters.size() ; i++ )
-			sb.append( "\\s+(\"(.+?)\"|([^\"\\s]+?))" );
+			sb.append( "\\s+(\"(.+?)\"|([^\"\\s]+))" );
 		
 		sb.append( "\\s*" );
+		
+		if( this.hasRest )
+			sb.append( "(.*?)" );
 		
 		return Pattern.compile( sb.toString() );		
 	}

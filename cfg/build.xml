@@ -60,14 +60,14 @@
 	
 	<target name="run-client2" depends="compile" description="Run 2nd client.">
 		<!-- Replace "your.Client" with the qualified class name of your client implementation. -->
-		<java classname="your.Client" fork="true" classpathref="project.classpath">
+		<java classname="client.Client" fork="true" classpathref="project.classpath">
 			<arg value="server1"/><!-- serverName -->
 		</java>
 	</target>
 	
 	<target name="run-client3" depends="compile" description="Run 3rd client.">
 		<!-- Replace "your.Client" with the qualified class name of your client implementation. -->
-		<java classname="your.Client" fork="true" classpathref="project.classpath">
+		<java classname="client.Client" fork="true" classpathref="project.classpath">
 			<arg value="server2"/><!-- serverName -->
 		</java>
 	</target>

@@ -9,6 +9,10 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 
 import remote.IDistributor;
@@ -19,19 +23,24 @@ import cmd.CommandParser;
 import cmd.DateParameter;
 import cmd.IntegerParameter;
 import cmd.StringParameter;
+import entities.EventInfo;
 import entities.RegistryInfo;
 import exceptions.ParseException;
 import exceptions.ValidationException;
 
 
+/**
+ * Client for the 2nd ds lab
+ */
 public class Client {
 
 	static final Logger logger = Logger.getLogger( Client.class.getName() );
-	
 	static final String PROPERTIES_FILE = "registry.properties";
 	
 	/**
-	 * @param args
+	 * The main method.
+	 * 
+	 * @param args the arguments
 	 */
 	public static void main( String[] args ) {
 
@@ -39,6 +48,7 @@ public class Client {
 		
 		CommandLineParser clp = new CommandLineParser( "java client.Client", "Client for the 2nd lab of distributed systems." );
 		
+		//Parse command line arguments
 		clp.addParameter( PRM_SERVERNAME );
 		
 		try {
@@ -53,6 +63,7 @@ public class Client {
 			return;
 		}
 		
+		//Connect to/Create the registry
 		Registry reg = null;
 		try {
 			RegistryInfo regInfo = RegistryInfo.readRegistryInfo( PROPERTIES_FILE );
@@ -71,14 +82,14 @@ public class Client {
 			return;
 		}
 		
+		//Receive the server's distributor object
+		//And get the clients remote interface
 		IRemoteClient server = null;
 		try
 		{
 			IDistributor dst = (IDistributor)reg.lookup( PRM_SERVERNAME.getValue() );
 			server = dst.getRemoteClient();
-			
-			
-			
+
 			logger.info( "Successfully connected to " + PRM_SERVERNAME.getValue() );
 		} catch( NotBoundException e ) {
 			logger.severe( "The server \"" + PRM_SERVERNAME.getValue() + "\" does not appear to be online." );
@@ -89,9 +100,11 @@ public class Client {
 			return;
 		}
 
+		//Export the clients callback interface
+		ClientCallback callback = null;
 		IClientCallback stub = null;
 		try{
-			ClientCallback callback = new ClientCallback();
+			callback = new ClientCallback();
 			stub = (IClientCallback)UnicastRemoteObject.exportObject( callback, 0 );
 		}catch( RemoteException rex )
 		{
@@ -100,6 +113,7 @@ public class Client {
 		}
 		
 		
+		//Start reading commands from stdin
 		BufferedReader br = new BufferedReader( new InputStreamReader( System.in ) );
 		Command cmd = null;
 		
@@ -122,42 +136,33 @@ public class Client {
 				}
 				
 				if( cmd == CMD_REGISTER )
-				{
-					String user = (String)cmd.getParameter( "username" ).getValue();
-					String pwd = (String)cmd.getParameter( "password" ).getValue();
-					if( server.register( user, pwd ) )
-						System.out.println( "Successfully registered." );
-					else
-						System.out.println( "Username already registered." );
-				}else if( cmd == CMD_LOGIN )
-				{
-					String user = (String)cmd.getParameter( "username" ).getValue();
-					String pwd = (String)cmd.getParameter( "password" ).getValue();
-					
-					if( server.login( user, pwd, stub ) )
-						System.out.println( "Successfully logged in" );
-					else
-						System.out.println( "Wrong username or password" );
-				}else if( cmd == CMD_CREATE )
-				{
-					String name = (String)cmd.getParameter( "name" ).getValue();
-					String location = (String)cmd.getParameter( "location" ).getValue();
-					int duration = (Integer)cmd.getParameter( "duration" ).getValue();
-					
-					if( server.create( name, location, duration ) )
-						System.out.println( "Event created successfully." );
-					else
-						System.out.println( "Error: An event of with this name already exists." );
-				}
+					doRegister(server, cmd);
+				else if( cmd == CMD_LOGIN )
+					doLogin(server, stub, cmd);
+				else if( cmd == CMD_CREATE )
+					doCreate(server, cmd);
+				else if( cmd == CMD_ADDDATE )
+					doAddDate(server, cmd);
+				else if( cmd == CMD_INVITE )
+					doInvite(server, cmd);
+				else if( cmd == CMD_GET )
+					doGet(server, cmd);
+				else if( cmd == CMD_VOTE )
+					doVote(server, cmd);
+				else if( cmd == CMD_FINALIZE )
+					doFinalize( server, cmd );
+				else if( cmd == CMD_LOGOUT )
+					doLogout(server);
+				
 				
 				
 			}catch( RemoteException rex )
 			{
 				Throwable cause = rex.getCause();
 				if( cause != null )
-					logger.info( cause.getMessage() );
+					System.out.println( "Error: " + cause.getMessage() );
 				else
-					logger.info( rex.getMessage() );
+					System.out.println( "Error: " + rex.getMessage() );
 			}
 			catch( IOException ioex )
 			{ logger.warning( "Couldn't read from stdin: " + ioex.getMessage() ); }
@@ -171,10 +176,107 @@ public class Client {
 		System.out.println( "Shutting down..." );
 		
 		try {
-			UnicastRemoteObject.unexportObject( stub, true );
-		} catch (NoSuchObjectException e) {	}
+			UnicastRemoteObject.unexportObject( callback, true );
+		} catch (NoSuchObjectException e) {
+			e.printStackTrace();
+			
+		}
+	}
+
+	private static void doFinalize(IRemoteClient server, Command cmd) throws RemoteException{
+		String name = (String)cmd.getParameter( "name of event" ).getValue();
+		
+		server.finalizeEvent( name );
+		EventInfo ei = server.get( name );
+		SimpleDateFormat sdf = new SimpleDateFormat( DateParameter.FORMAT_STRING );
+		System.out.println( "Event finalized. Final date/time is: " + sdf.format( ei.getFinalizedDate() ) );
+	}
+
+	private static void doLogout(IRemoteClient server) throws RemoteException {
+		server.logout();
+		System.out.println( "Logged out." );
+	}
+
+	private static void doVote(IRemoteClient server, Command cmd)
+			throws RemoteException {
+		String name = (String)cmd.getParameter( "name of event" ).getValue();
+		Set<Date> dates = new TreeSet<Date>();
+		
+		SimpleDateFormat sdf = new SimpleDateFormat( DateParameter.FORMAT_STRING );
+		
+		try {						
+			for( String str : cmd.getRest().split( "\\s" ) )
+			{
+				dates.add( sdf.parse( str ) );
+			}
+			
+			server.vote( name, dates );
+		} catch (java.text.ParseException e) {
+			System.out.println( "The date does not have the valid format. Please use " + DateParameter.FORMAT_STRING );
+		}
+	}
+
+	private static void doGet(IRemoteClient server, Command cmd)
+			throws RemoteException {
+		String name = (String)cmd.getParameter( "name of event" ).getValue();
+		
+		System.out.println( server.get( name ) );
+	}
+
+	private static void doInvite(IRemoteClient server, Command cmd)
+			throws RemoteException {
+		String name = (String)cmd.getParameter( "name of event" ).getValue();
+		String user = (String)cmd.getParameter( "username" ).getValue();
+		
+		server.invite( name, user );
+		System.out.println( "Invitation sent." );
+	}
+
+	private static void doAddDate(IRemoteClient server, Command cmd)
+			throws RemoteException {
+		String name = (String)cmd.getParameter( "name of event" ).getValue();
+		Date dt = (Date)cmd.getParameter( "date" ).getValue();
+
+		if( server.addDate( name, dt ) )
+			System.out.println( "Date option added." );
+		else
+			System.out.println( "This date option already exists." );
+	}
+
+	private static void doCreate(IRemoteClient server, Command cmd)
+			throws RemoteException {
+		String name = (String)cmd.getParameter( "name" ).getValue();
+		String location = (String)cmd.getParameter( "location" ).getValue();
+		int duration = (Integer)cmd.getParameter( "duration" ).getValue();
+		
+		if( server.create( name, location, duration ) )
+			System.out.println( "Event created successfully." );
+		else
+			System.out.println( "Error: An event of with this name already exists." );
+	}
+
+	private static void doLogin(IRemoteClient server, IClientCallback stub,
+			Command cmd) throws RemoteException {
+		String user = (String)cmd.getParameter( "username" ).getValue();
+		String pwd = (String)cmd.getParameter( "password" ).getValue();
+		
+		if( server.login( user, pwd, stub ) )
+			System.out.println( "Successfully logged in" );
+		else
+			System.out.println( "Wrong username or password" );
+	}
+
+	private static void doRegister(IRemoteClient server, Command cmd)
+			throws RemoteException {
+		String user = (String)cmd.getParameter( "username" ).getValue();
+		String pwd = (String)cmd.getParameter( "password" ).getValue();
+		if( server.register( user, pwd ) )
+			System.out.println( "Successfully registered." );
+		else
+			System.out.println( "Username already registered." );
 	}
 	
+	/** Command parsing stuff... */
 	static final Command CMD_REGISTER;
 	static final Command CMD_LOGIN;
 	static final Command CMD_CREATE;
@@ -185,7 +287,6 @@ public class Client {
 	static final Command CMD_FINALIZE;
 	static final Command CMD_LOGOUT;
 	static final Command CMD_EXIT;
-	
 	static CommandParser cmdParser;
 	
 	static
@@ -216,6 +317,7 @@ public class Client {
 	
 		CMD_VOTE = new Command( "vote" );
 		CMD_VOTE.addParameter( new StringParameter( "name of event", "The name of the event to vote on." ) );
+		CMD_VOTE.setHasRest( true );
 		
 		CMD_FINALIZE = new Command( "finalize" );
 		CMD_FINALIZE.addParameter( new StringParameter( "name of event", "The name of the event to finalize." ) );

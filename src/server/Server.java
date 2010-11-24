@@ -1,9 +1,11 @@
 package server;
 
+import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.rmi.AccessException;
+import java.io.InputStreamReader;
 import java.rmi.AlreadyBoundException;
+import java.rmi.NoSuchObjectException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.Registry;
@@ -23,12 +25,14 @@ import entities.User;
 import exceptions.ParseException;
 import exceptions.ValidationException;
 
-
+/**
+ * Server class for the 2nd ds lab.
+ */
 public class Server {
 	
 	static final Logger logger = Logger.getLogger( Server.class.getName() );
-	
 	static final String PROPERTIES_FILE = "registry.properties";
+	
 	
 	private String bindingName;
 	private boolean initRegistry;
@@ -36,24 +40,51 @@ public class Server {
 	private RegistryInfo regInfo;
 	private Registry reg;
 	
+	/** servers. */
 	private ConcurrentHashMap<String, IRemoteServer> servers;
+	/** users. */
 	private ConcurrentHashMap<String, User> users;
+	/** events. */
 	private ConcurrentHashMap<String, Event> events;
+	
+	/** The distributor interface. */
+	Distributor dist;
 
 	
+	/**
+	 * Gets the users.
+	 * 
+	 * @return the users
+	 */
 	public ConcurrentHashMap<String, User> getUsers() {
 		return users;
 	}
 	
+	/**
+	 * Gets the events.
+	 * 
+	 * @return the events
+	 */
 	public ConcurrentHashMap<String, Event> getEvents() {
 		return this.events;
 	}
 
 
+	/** The lookup task. */
 	private LookupTask lookupTask;
+	
+	/** The stub. */
 	private IDistributor stub;
 	
 	
+	/**
+	 * Instantiates a new server.
+	 * 
+	 * @param bindingName the binding name
+	 * @param initRegistry the init registry
+	 * @param regInfo the reg info
+	 * @param serverNames the server names
+	 */
 	public Server( String bindingName, boolean initRegistry, RegistryInfo regInfo, String...serverNames )
 	{
 		this.bindingName = bindingName;
@@ -69,7 +100,9 @@ public class Server {
 	
 
 	/**
-	 * @param args
+	 * The main method.
+	 * 
+	 * @param args the arguments
 	 */
 	public static void main( String[] args ) {
 	
@@ -79,7 +112,8 @@ public class Server {
 		final CommandLineParser clp = new CommandLineParser( "java server.Server", "Server for the lab2 event scheduling system." );
 		clp.addParameters( PRM_BINDINGNAME, PRM_INITREGISTRY, PRM_SERVERNAMES );
 		
-		try{	
+		try{
+			//Parse command line arguments
 			clp.parse( args );
 			
 
@@ -120,9 +154,32 @@ public class Server {
 									regInfo,
 									PRM_SERVERNAMES.getValue().split( "\\s" ) );
 
-		srv.start();
+		if( !srv.start() )
+			System.exit( 1 );
+		
+		try {
+			new BufferedReader( new InputStreamReader( System.in ) ).readLine();
+		} catch (IOException e) {
+			logger.warning( "Couldn't read from stdin" );
+		}
+		
+		try {
+			srv.stop();
+		} catch (Exception ex) {
+			System.err.println( "Error: " + ex.getMessage() );
+		}
+		
+		System.out.println( "Shutting down.." );
 	}
 	
+	
+	
+	
+	/**
+	 * Start.
+	 * 
+	 * @return true, if successful
+	 */
 	public boolean start()
 	{
 		reg = null;
@@ -130,7 +187,7 @@ public class Server {
 		//Create or connect to the registry
 		try{
 			reg = this.regInfo.connect( this.initRegistry );
-			Distributor dist = new Distributor( this );
+			this.dist = new Distributor( this );
 			this.stub = (IDistributor)UnicastRemoteObject.exportObject( dist, 0 );
 			reg.bind( this.bindingName, this.stub );
 			
@@ -153,40 +210,103 @@ public class Server {
 	}
 	
 	
-	public void stop() throws AccessException, NotBoundException, RemoteException
+	/**
+	 * Stop.
+	 */
+	public void stop()
 	{
-		if( this.stub != null )
-			UnicastRemoteObject.unexportObject( this.stub, true );
+		this.lookupTask.stop();
 		
-		UnicastRemoteObject.unexportObject( this.reg, true );
-		this.reg.unbind( this.bindingName );
+		if( this.stub != null )
+		{
+			try {
+				this.reg.unbind( this.bindingName );
+			
+				this.dist.unexportClients();
+			
+				this.dist.unexportServer();
+			
+			
+				UnicastRemoteObject.unexportObject( this.dist, true );
+			}catch( RemoteException rex )
+			{
+				logger.warning( rex.getMessage() );
+			}catch( NotBoundException nbex )
+			{
+				logger.warning( nbex.getMessage() );
+			}
+		}
+		
+		try {
+			UnicastRemoteObject.unexportObject( this.reg, true );
+		} catch (NoSuchObjectException ex) {
+			ex.printStackTrace();
+		}
+		
+		
 		
 	}
 	
+	/**
+	 * Adds the server.
+	 * 
+	 * @param name the name
+	 * @param server the server
+	 * @return true, if successful
+	 */
 	public boolean addServer( String name, IRemoteServer server )
 	{
 		return this.servers.put( name, server ) == null;
 	}
 	
+	/**
+	 * Gets the server.
+	 * 
+	 * @param name the name
+	 * @return the server
+	 */
 	public IRemoteServer getServer( String name )
 	{
 		return this.servers.get( name );
 	}
 
+	/**
+	 * Checks if is network complete.
+	 * 
+	 * @return true, if is network complete
+	 */
 	public boolean isNetworkComplete()
 	{
 		return this.servers.size() == this.serverNames.length;
 	}
 
+	/**
+	 * Gets the registry.
+	 * 
+	 * @return the registry
+	 */
 	public Registry getRegistry() {
 		return this.reg;
 	}
 
 
+	/**
+	 * Gets the server names.
+	 * 
+	 * @return the server names
+	 */
 	public String[] getServerNames() {
 		return this.serverNames;
 	}
 
-
+	/**
+	 * Gets the name.
+	 * 
+	 * @return the name
+	 */
+	public String getName()
+	{
+		return this.bindingName;
+	}
 
 }
